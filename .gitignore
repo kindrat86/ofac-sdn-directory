@@ -1,0 +1,7 @@
+data/ofac-sdn.json
+dist/
+node_modules/
+.vercel/
+__pycache__/
+*.pyc
+.DS_Store
