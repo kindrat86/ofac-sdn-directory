@@ -2,11 +2,10 @@ name: Daily OFAC Data Refresh & Deploy
 
 on:
   schedule:
-    # Runs at 09:00 UTC every day (Treasury publishes updates multiple times/week)
-    - cron: '0 9 * * *'
-  workflow_dispatch:     # manual trigger from GitHub UI
+    - cron: '0 9 * * *'          # daily at 09:00 UTC
+  workflow_dispatch:               # manual trigger from GitHub UI
   push:
-    branches: [master]   # deploy on push too
+    branches: [master]
 
 env:
   SITE_BASE: https://ofac-sdn-directory.vercel.app
@@ -14,16 +13,18 @@ env:
 jobs:
   refresh-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
       - name: Fetch fresh OFAC data from U.S. Treasury
         run: python3 src/fetch_data.py
@@ -31,26 +32,28 @@ jobs:
       - name: Rebuild static site
         run: SITE_BASE="${{ env.SITE_BASE }}" python3 src/build.py
 
-      - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: '--prod --yes'
-          working-directory: ./
+      - name: Install Vercel CLI
+        run: npm i -g vercel
 
-      - name: Notify IndexNow (Bing/Yandex/Seznam/Naver)
+      - name: Deploy to Vercel
+        run: |
+          vercel deploy dist --prod --yes --archive=tgz --token "$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Ping IndexNow
         if: success()
         run: |
-          KEY="267c17db-a184-4de7-9a3a-b5896bad1d3c0000"
           curl -s -X POST "https://api.indexnow.org/indexnow" \
             -H "Content-Type: application/json" \
-            -d "{\"host\":\"ofac-sdn-directory.vercel.app\",\"key\":\"$KEY\",\"urlList\":[\"$SITE_BASE/\",\"$SITE_BASE/wallets/\"]}"
+            -d "{\"host\":\"ofac-sdn-directory.vercel.app\",\"key\":\"267c17db-a184-4de7-9a3a-b5896bad1d3c0000\",\"keyLocation\":\"$SITE_BASE/267c17db-a184-4de7-9a3a-b5896bad1d3c0000.txt\",\"urlList\":[\"$SITE_BASE/\",\"$SITE_BASE/wallets/\"]}"
 
-      - name: Summary
+      - name: Report
         if: always()
         run: |
-          echo "📊 Site: $SITE_BASE"
-          echo "📂 Repo: https://github.com/${{ github.repository }}"
-          echo "📅 Data refreshed: $(date -u)"
+          echo "## OFAC SDN Directory" >> $GITHUB_STEP_SUMMARY
+          echo "**Site:** $SITE_BASE" >> $GITHUB_STEP_SUMMARY
+          echo "**Repo:** https://github.com/${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Data refreshed:** $(date -u)" >> $GITHUB_STEP_SUMMARY
