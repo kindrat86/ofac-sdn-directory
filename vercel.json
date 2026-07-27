@@ -1,6 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "python3 src/fetch_data.py && python3 src/build.py",
   "outputDirectory": "dist",
   "cleanUrls": true,
   "trailingSlash": true,
