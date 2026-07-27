@@ -13,7 +13,7 @@ env:
 jobs:
   refresh-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -35,9 +35,18 @@ jobs:
       - name: Install Vercel CLI
         run: npm i -g vercel
 
-      - name: Deploy to Vercel
-        run: |
-          vercel deploy dist --prod --yes --archive=tgz --token "$VERCEL_TOKEN"
+      - name: Package prebuilt output
+        # Build .vercel/output locally from the already-generated dist/.
+        # No server-side build runs on Vercel — the deploy below ships this as-is.
+        run: vercel build --prod --yes --token "$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy prebuilt to Vercel
+        # --prebuilt uploads .vercel/output without triggering any build.
+        run: vercel deploy --prebuilt --prod --yes --archive=tgz --token "$VERCEL_TOKEN"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
